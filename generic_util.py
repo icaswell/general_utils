@@ -1,35 +1,54 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# File: python_template.py
+# File: generic_util.py
 # @Author: Isaac Caswell
 # @created: 21 February 2015
 #
 #===============================================================================
 # DESCRIPTION:
 #
-# A template with various useful python functionc/etc that I always have to look
-# up from other files.  For instance, how to plot things with legends, print 
-# things in color, and get command line arguments
+# A file containing various useful functions I often find I have to write in my 
+# scripts/have to look up from other files.  For instance, how to plot things 
+# with legends, print things in color, and get command line arguments
 #
 #===============================================================================
 # CURRENT STATUS: Works!  In progress.
 #===============================================================================
 # USAGE:
-# import lolol as rofl
-# print lolol(floop)
+# import generic_util as gu
+# gu.colorprint("This text is flashing in some terminals!!", "flashing")
 # 
 #===============================================================================
-# INPUT:
-#
-#===============================================================================
-# OUTPUT:
+# CONTAINS:
+# 
+#-------------------------------------------------------------------------------
+# COSMETIC:
+#-------------------------------------------------------------------------------
+# colorprint: prints the given text in the given color
+# time_string:
+#       returns a string representing the date in the form '12-Jul-2013' etc.
+#       Handy naming of files.
+#-------------------------------------------------------------------------------
+# FOR (LARGE) FILES:
+#-------------------------------------------------------------------------------
+# randomly_sample_file: given the name of some unnecessarily large file that you
+#       have to work with, original_fname, randomly samples it to have a given
+#       number of lines.  This function is used for when you want to do some 
+#       testing of your script on a pared down file first.
+# scramble_file_lines:
+#       randomly permutes the lines in the input file.  If the input 
+#       file is a list, permutes all lines in the iput files in the asme way.
+#       Useful if you are doing SGD, for instance.
+# file_generator:
+#       streams a file line by line, and processes that line as a list of integers.
+# split_file: given the name of some unnecessarily large file that you have to 
+#       work with, original_fname, this function splits it into a bunch of
+#       smaller files that you can then do multithreaded operations on.
 #
 #===============================================================================
 # TODO: 
-# -prepend 'private' methods with _
-# -diagram program flow in this section
-# -change all appropriate np.ndarrays to scipy sparse matrices
+# make general plotting function
 
 
 #standard modules
@@ -114,12 +133,9 @@ def randomly_sample_file(original_fname, output_fname, n_lines_to_output = 100, 
 
 
 def scramble_file_lines(original_fname, output_fname, delimitor = '\n'):
-    """given the name of some unnecessarily large file that you have to work with, original_fname,
-    randomly samples it to have n_lines_to_output.  This function is used for when you want to
-    do some testing of your script on a pared down file first.
-
-    if original_fname is a list, then all files are sampled evenly  (the same lines are taken from 
-    each one.)
+    """randomly permutes the lines in the input file.  If the input 
+    file is a list, permutes all lines in the iput files in the asme way.
+    Useful if you are doing SGD, for instance.
 
     Usage: 
     scramble_file_lines([X_FILENAME, Y_FILENAME], ["./data/scrambled_features.txt", "./data/scrambled_target.txt"])
@@ -147,7 +163,6 @@ def scramble_file_lines(original_fname, output_fname, delimitor = '\n'):
         with open(output_fname_i, 'w') as output_i:
             for line in lines:
                 output_i.write(line[i])
-
 
 
 
@@ -198,6 +213,7 @@ def time_string(precision='day'):
     return t
 
 def convert_to_png(denoised_image):
+    """TODO: this is not a real function"""
     plt.imshow(denoised_image, cmap=plt.cm.gray)
     plt.show()
 

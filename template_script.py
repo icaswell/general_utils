@@ -1,16 +1,16 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# File: python_template.py
+# File: template_script.py
 # @Author: Isaac Caswell
 # @created: 21 February 2015
 #
 #===============================================================================
 # DESCRIPTION:
 #
-# A template with various useful python functionc/etc that I always have to look
-# up from other files.  For instance, how to plot things with legends, print 
-# things in color, and get command line arguments
+# A template with my commenting conventions included, as well as generic_util, 
+# which contains many useful functions, aand some common things I use, like 
+# get_args and plotting with legends
 #
 #===============================================================================
 # CURRENT STATUS: Works!  In progress.
@@ -38,7 +38,7 @@ import time
 from collections import Counter
 import heapq
 import matplotlib.pyplot as plt
-import argparse
+
 
 #third party modules
 import generic_util as gutil
