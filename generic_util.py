@@ -64,6 +64,18 @@ import argparse
 # FUNCTIONS
 #===============================================================================
 
+def add_header(fname, header):
+    tmp_fname = 'loltempfile'
+    if header[-1] != '\n':
+        header += '\n'
+    shutil.copyfile(fname, tmp_fname)
+    with open(fname, 'w') as f:
+        f.write(header)
+        with open(tmp_fname, 'r') as g:
+            for line in g:
+                f.write(line)
+    os.remove(tmp_fname)
+
 
 def split_file(original_fname, output_dir_fname, n_splits = 15, delimitor = '\n'):
     """given the name of some unnecessarily large file that you have to work with, original_fname,
@@ -96,8 +108,41 @@ def split_file(original_fname, output_dir_fname, n_splits = 15, delimitor = '\n'
         output_f.close()
 
 
+def make_dev_train_sets(original_fname, names, percents, scramble = False):
+    """
+    """
+    assert(abs(sum(percents) - 1) < 1e-5)
+    assert(len(names) == len(percents))
 
-def randomly_sample_file(original_fname, output_fname, n_lines_to_output = 100, delimitor = '\n'):
+    if scramble:
+        scramble_file_lines(original_fname, original_fname  + '.scrambled')
+        original_fname = original_fname  + '.scrambled'
+
+    lines_in_file = 0
+    with open(original_fname, 'r') as f:
+        for line in f:
+            lines_in_file += 1
+
+    lines_per_split = [p*lines_in_file for p in percents]
+    lines_per_split = [np.ceil(n) for n in lines_per_split]
+
+    with open(original_fname, 'r') as input_f:
+        cur_split = 0
+        output_f = open(names[0], 'w')
+        i = 0
+        for line in input_f:
+            if i%lines_per_split[cur_split] == 0 and i:
+                cur_split += 1
+                i=0
+                output_f.close()
+                output_f = open(names[cur_split], 'w')
+            output_f.write(line)
+            i += 1
+
+        output_f.close()
+
+
+def randomly_sample_file(original_fname, output_fname, n_lines_to_output = 100, delimitor = '\n', preserve_first_line = 0):
     """given the name of some unnecessarily large file that you have to work with, original_fname,
     randomly samples it to have n_lines_to_output.  This function is used for when you want to
     do some testing of your script on a pared down file first.
@@ -107,6 +152,8 @@ def randomly_sample_file(original_fname, output_fname, n_lines_to_output = 100, 
 
     Usage: 
     randomly_sample_file(["./data/features.txt", "./data/target.txt"], ["./data/dev_features.txt", "./data/dev_target.txt"], 200)
+
+    randomly_sample_file("data/clean_mail.tsv", "data/toy.tsv")
 
     """
     assert(type(original_fname) == type(output_fname))
@@ -122,8 +169,10 @@ def randomly_sample_file(original_fname, output_fname, n_lines_to_output = 100, 
         for line in f:
             lines_in_file += 1
 
-    line_idxs_to_output = range(n_lines_to_output); random.shuffle(line_idxs_to_output)
-    line_idxs_to_output = set(line_idxs_to_output[0:lines_in_file])
+    line_idxs_to_output = range(lines_in_file)[1:] if preserve_first_line else np.arange(lines_in_file)
+    np.random.shuffle(line_idxs_to_output)
+    if preserve_first_line: line_idxs_to_output = [0] + line_idxs_to_output
+    line_idxs_to_output = set(line_idxs_to_output[0:n_lines_to_output])
 
     for input_fname_i, output_fname_i in zip(original_fname, output_fname): 
         with open(input_fname_i, 'r') as input_i, open(output_fname_i, 'w') as output_i:
@@ -157,7 +206,7 @@ def scramble_file_lines(original_fname, output_fname, delimitor = '\n'):
                     lines.append([])
                 lines[i].append(line)
 
-    random.shuffle(lines)
+    np.random.shuffle(lines)
 
     for i, output_fname_i in enumerate(output_fname): 
         with open(output_fname_i, 'w') as output_i:
