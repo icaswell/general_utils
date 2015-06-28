@@ -54,15 +54,22 @@
 #standard modules
 import numpy as np
 import time
-from collections import Counter
+from collections import Counter, defaultdict
 import heapq
 import matplotlib.pyplot as plt
 import argparse
+import shutil
+import csv
+import os
+import re
+import collections
+import json
 
 
 #===============================================================================
 # FUNCTIONS
 #===============================================================================
+
 
 def add_header(fname, header):
     tmp_fname = 'loltempfile'
@@ -76,7 +83,7 @@ def add_header(fname, header):
                 f.write(line)
     os.remove(tmp_fname)
 
-
+ 
 def split_file(original_fname, output_dir_fname, n_splits = 15, delimitor = '\n'):
     """given the name of some unnecessarily large file that you have to work with, original_fname,
     this function splits it into a bunch of smaller files that you can then do multithreaded 
@@ -108,19 +115,23 @@ def split_file(original_fname, output_dir_fname, n_splits = 15, delimitor = '\n'
         output_f.close()
 
 
-def make_dev_train_sets(original_fname, names, percents, scramble = False):
+def make_dev_train_sets(original_fname, names, percents, scramble = False, preserve_header = 0):
     """
+    TODO: extend to take lists of files as input. 
     """
     assert(abs(sum(percents) - 1) < 1e-5)
     assert(len(names) == len(percents))
 
     if scramble:
-        scramble_file_lines(original_fname, original_fname  + '.scrambled')
+        scramble_file_lines(original_fname, original_fname  + '.scrambled', keep_first_line_first = preserve_header)
         original_fname = original_fname  + '.scrambled'
 
     lines_in_file = 0
+    header = None
     with open(original_fname, 'r') as f:
-        for line in f:
+        for i, line in enumerate(f):
+            if not i and preserve_header:
+                header = line
             lines_in_file += 1
 
     lines_per_split = [p*lines_in_file for p in percents]
@@ -130,19 +141,23 @@ def make_dev_train_sets(original_fname, names, percents, scramble = False):
         cur_split = 0
         output_f = open(names[0], 'w')
         i = 0
+        if preserve_header:
+            input_f.readline()
         for line in input_f:
             if i%lines_per_split[cur_split] == 0 and i:
                 cur_split += 1
                 i=0
                 output_f.close()
                 output_f = open(names[cur_split], 'w')
+                if preserve_header:
+                    output_f.write(header)
             output_f.write(line)
             i += 1
 
         output_f.close()
 
 
-def randomly_sample_file(original_fname, output_fname, n_lines_to_output = 100, delimitor = '\n', preserve_first_line = 0):
+def randomly_sample_file(original_fname, output_fname, n_lines_to_output = 100, delimitor = '\n', preserve_first_line = 1):
     """given the name of some unnecessarily large file that you have to work with, original_fname,
     randomly samples it to have n_lines_to_output.  This function is used for when you want to
     do some testing of your script on a pared down file first.
@@ -181,9 +196,9 @@ def randomly_sample_file(original_fname, output_fname, n_lines_to_output = 100, 
                     output_i.write(line)
 
 
-def scramble_file_lines(original_fname, output_fname, delimitor = '\n'):
+def scramble_file_lines(original_fname, output_fname, delimitor = '\n', keep_first_line_first = 0):
     """randomly permutes the lines in the input file.  If the input 
-    file is a list, permutes all lines in the iput files in the asme way.
+    file is a list, permutes all lines in the iput files in the same way.
     Useful if you are doing SGD, for instance.
 
     Usage: 
@@ -199,8 +214,11 @@ def scramble_file_lines(original_fname, output_fname, delimitor = '\n'):
 
 
     lines = [] #lines[i] is a list of lines
+    headers = []
     for input_i in original_fname:
         with open(input_i, 'r') as f:
+            if keep_first_line_first:
+                headers.append(f.readline())
             for i, line in enumerate(f):
                 if len(lines) == i:
                     lines.append([])
@@ -210,10 +228,10 @@ def scramble_file_lines(original_fname, output_fname, delimitor = '\n'):
 
     for i, output_fname_i in enumerate(output_fname): 
         with open(output_fname_i, 'w') as output_i:
+            if keep_first_line_first:
+                output_i.write(headers[i])
             for line in lines:
                 output_i.write(line[i])
-
-
 
 def file_generator(fname):
     """streams a file line by line, and processes that line as a list of integers."""
@@ -221,19 +239,30 @@ def file_generator(fname):
         for line in f:
             yield [int(v) for v in line.split()]
 
+
+#-----------------------------------------------------------------------------------------            
+
 def colorprint(message, color="rand"):
+    message = unicode(message)
     """prints your message in pretty colors! So far, only a few color are available."""
     if color == 'none': print message
     if color == 'demo':
         for i in range(99):
-            print '%i-'%i + '\033[%sm'%i + message + '\033[0m\t',
+            print '\n%i-'%i + '\033[%sm'%i + message + '\033[0m\t',
     print '\033[%sm'%{
         'neutral' : 99,
         'flashing' : 5,
         'underline' : 4,
-        'magenta_highlight' : 45,
         'red_highlight' : 41,
+        'green_highlight' : 42,
+        'orange_highlight' : 43,
+        'blue_highlight' : 44,
+        'magenta_highlight' : 45,
+        'teal_highlight' : 46,
+        'pink_highlight' : 46,        
         'pink' : 35,
+        'purple' : 34,
+        'peach' : 37,
         'yellow' : 93,   
         'teal' : 96,     
         'rand' : np.random.randint(1,99),
@@ -261,12 +290,65 @@ def time_string(precision='day'):
     t = t.replace(' ', '-')
     return t
 
-def convert_to_png(denoised_image):
-    """TODO: this is not a real function"""
-    plt.imshow(denoised_image, cmap=plt.cm.gray)
-    plt.show()
+
+def random_string_signature(length = 4):
+    candidates = list("qwertyuiopasdfghjklzxcvbnmQWERTYUIOPASDFGHJKLZXCVBNM1234567890")
+    np.random.shuffle(candidates)
+    return "".join(candidates[0:length])
+
+def str_parse(s, to_lower = True):
+    parse = re.split('[\s/\\\\,]', s)
+    # below line fails on unicode
+    # parse = [w.translate(string.maketrans("",""), string.punctuation) for w in parse]
+    parse = [re.sub('[,<>\.;:!?\"]', '', w) for w in parse]
+    parse = [w for w in parse if w]
+    if to_lower:
+        parse = [w.lower() for w in parse]
+    return parse
 
 
+
+
+# class BarGraph:
+#     '''
+#         Module to allow for bar graphs
+
+#     '''
+    
+#     def __init__(self, title, ylabel='', xlabel=''):
+#         self.clfs_to_f1 = defaultdict(list)
+#         self.clfs = []
+#         self.datasets = []
+#         self.title = title
+#         self.ylabel = ylabel
+#         self.xlabel = xlabel
+#         self.width = 0.08
+#         self.colors = ('b','g','r','c','m','y','k','w')
+
+
+#     def add_to_graph(self, dataset_name, clf_name, f1):
+#         self.clfs_to_f1[clf_name].append(f1)
+#         if clf_name not in self.clfs:
+#             self.clfs.append(clf_name)
+#         if dataset_name not in self.datasets:
+#             self.datasets.append(dataset_name)
+
+#     def plot(self):
+#         ind = np.arange(len(self.datasets))
+#         fig, ax = plt.subplots()
+#         rects = [ax.bar(ind+self.width*i, self.clfs_to_f1[clf], self.width, color=self.colors[i%len(self.colors)]) for i, clf in enumerate(self.clfs)]
+#         ax.set_ylabel(self.ylabel)
+#         ax.set_title(self.title)
+#         ax.set_xticks(ind+self.width*len(self.clfs))
+#         ax.set_xticklabels( tuple(self.datasets) )
+#         ax.legend(tuple([rect[0] for rect in rects]), tuple(self.clfs))
+#         plt.show()
+
+#     def sklearn_clf_rpt_parser(self, rpt):
+#         line = re.findall('avg / total [\.\d\s]*', rpt)
+#         if line == []:
+#             return ()
+#         return float(line[0].split()[5]) 
 
 #===============================================================================
 # TESTING SCRIPT
@@ -275,18 +357,60 @@ def convert_to_png(denoised_image):
 #-------------------------------------------------------------------------------
 # part (i) 
 
+
 if __name__ == '__main__':
-    print 'You are running this from the command line, so you must be demoing it!'
-    start_time = time.time()
-
-    domain = range(k)
-    f_1 = [i**2 for i in domain]
-    f_2 = [np.sin(i) for i in domain]
-    f_3 = [np.random.rand()*i for i in domain]
+    # print 'You are running this from the command line, so you must be demoing it!'
 
 
-    colorprint("time to do computation: %s"%(time.time() - start_time))
-    colorprint(time_string())
+    # print str_parse("//THERE REALLY HASN'T BEEN ONE//ILLEGAL IMMIGRATION")
+    # print str_parse("<DK>")
+    # print str_parse("\\\\jobs\\\\ anyting else\\\\")  
+
+    # print str_parse("service, installs systems into houses, condos, hotels")         
+    # print str_parse("the war/so many deaths/")         
+    # print str_parse("Finance/everybody is going broke, all small businesses are shuting down,big corporations are letting go of workers")                 
+    # print str_parse(""""jobs"//""")
+
+    # pc = PlotCatcher()
+    # # exit(0)
+    # def report_smartness(): 
+    #     if np.random.random()<.8 :
+    #         return 'still training...' 
+    #     else:
+    #         return """FINDINGS ON DATASET ./preprocessed_data/train/mip_personal_2_binarized_pp_train.tsv:
+    #          precision    recall  f1-score   support
+    #         avg / total       0.74      0.75      0.73      2009
+    #         Accuracy: 0.749128919861"""
+
+    # for i in range(19):
+    #     print pc.catch(i**2, 'x squared')
+    #     print pc.catch(i**3, 'x cubed', c='r--')  
+    #     print pc.catch(report_smartness(), 'ml', pc.sklearn_clf_rpt_parser)      
+    # pc.plotByIds(['x squared', 'x cubed'])
+    # pc.plotByIds('ml')
+
+
+    # colorprint("nyaan", color="demo")           
+
+    # exit(0)
+    # print os.listdir('../original_data/all_data')
+    # fnames = ['current_industry', 'current_occupation', 'MIP_personal_1', 'MIP_personal_2', 'MIP_political_1', 'MIP_political_2', 'past_industry', 'past_occupation', 'PK_brown', 'PK_cheney', 'PK_pelosi', 'PK_roberts', 'terrorists']
+    # fnames = ['current_industry_binarized', 'current_occupation_binarized', 'mip_personal_binarized', 'mip_political_binarized', 'past_industry_binarized', 'past_occupation_binarized', 'pk_brown_binarized', 'pk_cheney_binarized', 'pk_pelosi_binarized', 'pk_roberts_binarized', 'terrorists_binarized']
+    # fnames =  ['industry_binarized', 'occupation_binarized']
+    # for fname in fnames:
+    fname = "mip_binarized"
+    make_dev_train_sets('../original_data/all_data/%s.tsv'%fname, \
+        ['../original_data/train/%s_train.tsv'%fname, 
+        '../original_data/dev/%s_dev.tsv'%fname, 
+        '../original_data/test/%s_test.tsv'%fname
+        ], 
+        [.75, .15, .1], 
+        scramble = True)
+    # add_header('data/clean_mail_test.tsv', 'Subject   Delivered-To    Received    From    To  X-GM-THRID  X-Gmail-Labels  importance  content')
+    # add_header('data/clean_mail_train.tsv', 'Subject   Delivered-To    Received    From    To  X-GM-THRID  X-Gmail-Labels  importance  content')
+    # randomly_sample_file("data/clean_mail.tsv", "data/toy_train.tsv", preserve_first_line = 1)
+    # randomly_sample_file("data/clean_mail.tsv", "data/toy_test.tsv", preserve_first_line = 1)
+
 
 
 
